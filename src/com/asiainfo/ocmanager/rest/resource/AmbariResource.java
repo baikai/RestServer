@@ -12,6 +12,9 @@ import javax.ws.rs.core.Response.Status;
 
 import org.apache.log4j.Logger;
 
+import com.asiainfo.ocmanager.audit.Audit;
+import com.asiainfo.ocmanager.audit.Audit.Action;
+import com.asiainfo.ocmanager.audit.Audit.TargetType;
 import com.asiainfo.ocmanager.service.client.AmbariClient;
 import com.asiainfo.ocmanager.service.client.ClusterFactory;
 
@@ -37,6 +40,7 @@ public class AmbariResource {
 	@GET
 	@Path("yarnclient")
 	@Produces(MediaType.APPLICATION_OCTET_STREAM)
+	@Audit(action = Action.GET, targetType = TargetType.AMBARI_RESOURCES)
 	public Response getYarnClientFiles(@QueryParam("filename") String filename, @Context HttpServletRequest request) {
 
 		try {
@@ -48,11 +52,11 @@ public class AmbariResource {
 			byte[] file = ambari.getFile("/YARN/components/YARN_CLIENT?format=client_config_tar");
 			return Response.ok(file)
 					.header("Content-disposition", "attachment;filename=" + filename + tarGz)
-					.header("Cache-Control", "no-cache").build();
+					.header("Cache-Control", "no-cache").tag(filename).build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getYarnClientFiles hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(filename).build();
 		}
 	}
 
@@ -65,6 +69,7 @@ public class AmbariResource {
 	@GET
 	@Path("hdfsclient")
 	@Produces(MediaType.APPLICATION_OCTET_STREAM)
+	@Audit(action = Action.GET, targetType = TargetType.AMBARI_RESOURCES)
 	public Response getHdfsClientFiles(@QueryParam("filename") String filename, @Context HttpServletRequest request) {
 		try {
 			if (filename == null || filename.isEmpty()) {
@@ -75,11 +80,11 @@ public class AmbariResource {
 			byte[] file = ambari.getFile("/HDFS/components/HDFS_CLIENT?format=client_config_tar");
 			return Response.ok(file)
 					.header("Content-disposition", "attachment;filename=" + filename + tarGz)
-					.header("Cache-Control", "no-cache").build();
+					.header("Cache-Control", "no-cache").tag(filename).build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getHdfsClientFiles hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(filename).build();
 		}
 	}
 
@@ -92,6 +97,7 @@ public class AmbariResource {
 	@GET
 	@Path("sparkclient")
 	@Produces(MediaType.APPLICATION_OCTET_STREAM)
+	@Audit(action = Action.GET, targetType = TargetType.AMBARI_RESOURCES)
 	public Response getSparkClientFiles(@QueryParam("filename") String filename, @Context HttpServletRequest request) {
 		try {
 			if (filename == null || filename.isEmpty()) {
@@ -102,10 +108,10 @@ public class AmbariResource {
 			byte[] file = ambari.getFile("/SPARK/components/SPARK_CLIENT?format=client_config_tar");
 			return Response.ok(file)
 					.header("Content-disposition", "attachment;filename=" + filename + tarGz)
-					.header("Cache-Control", "no-cache").build();
+					.header("Cache-Control", "no-cache").tag(filename).build();
 		} catch (Exception e) {
 			logger.error("getHdfsClientFiles hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(filename).build();
 		}
 	}
 

@@ -14,6 +14,7 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.apache.log4j.Logger;
 
+import com.asiainfo.ocmanager.audit.AuditFilter;
 import com.asiainfo.ocmanager.auth.Authenticator;
 import com.asiainfo.ocmanager.rest.constant.ResponseCodeConstant;
 
@@ -44,6 +45,7 @@ public class AuthFilter implements Filter {
 				}
 
 				if (token == null) {
+					AuditFilter.audit403(hsRequest);
 					((HttpServletResponse) servletResponse).sendError(ResponseCodeConstant.FORBIDDEN);
 				} else {
 					boolean authcSuccess = authenticate(token);
@@ -52,11 +54,13 @@ public class AuthFilter implements Filter {
 						filterChain.doFilter(servletRequest, servletResponse);
 					} else {
 						logger.warn("Authentication fail with token: " + token);
+						AuditFilter.audit403(hsRequest);
 						((HttpServletResponse) servletResponse).sendError(ResponseCodeConstant.FORBIDDEN);
 					}
 				}
 			} catch (Exception e) {
 				logger.error("Error while do filter: ", e);
+				AuditFilter.audit403(hsRequest);
 				((HttpServletResponse) servletResponse).sendError(ResponseCodeConstant.FORBIDDEN);
 			}
 		}

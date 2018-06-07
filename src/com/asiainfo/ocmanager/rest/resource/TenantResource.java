@@ -29,6 +29,9 @@ import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.asiainfo.ocmanager.audit.Audit;
+import com.asiainfo.ocmanager.audit.Audit.Action;
+import com.asiainfo.ocmanager.audit.Audit.TargetType;
 import com.asiainfo.ocmanager.auth.utils.TokenPaserUtils;
 import com.asiainfo.ocmanager.concurrent.TenantLockerPool;
 import com.asiainfo.ocmanager.persistence.model.ServiceInstance;
@@ -86,6 +89,7 @@ public class TenantResource {
 	 */
 	@GET
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.TENANTS)
 	public Response getAllTenants() {
 		try {
 			List<Tenant> tenants = TenantPersistenceWrapper.getAllTenants();
@@ -107,14 +111,15 @@ public class TenantResource {
 	@GET
 	@Path("{id}")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.TENANT)
 	public Response getTenantById(@PathParam("id") String tenantId) {
 		try {
 			Tenant tenant = TenantPersistenceWrapper.getTenantById(tenantId);
-			return Response.ok().entity(tenant).build();
+			return Response.ok().entity(tenant).tag(tenantId).build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getTenantById hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(tenantId).build();
 		}
 	}
 
@@ -128,14 +133,15 @@ public class TenantResource {
 	@GET
 	@Path("{id}/children")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.TENANTS)
 	public Response getChildrenTenants(@PathParam("id") String parentTenantId) {
 		try {
 			List<Tenant> tenants = TenantPersistenceWrapper.getChildrenTenants(parentTenantId);
-			return Response.ok().entity(tenants).build();
+			return Response.ok().entity(tenants).tag(parentTenantId).build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getChildrenTenants hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(parentTenantId).build();
 		}
 	}
 
@@ -149,14 +155,15 @@ public class TenantResource {
 	@GET
 	@Path("{id}/users")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.USERS)
 	public Response getTenantUsers(@PathParam("id") String tenantId) {
 		try {
 			List<UserRoleView> usersRoles = UserRoleViewPersistenceWrapper.getUsersInTenant(tenantId);
-			return Response.ok().entity(usersRoles).build();
+			return Response.ok().entity(usersRoles).tag(tenantId).build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getTenantUsers hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(tenantId).build();
 		}
 	}
 
@@ -196,6 +203,7 @@ public class TenantResource {
 	@GET
 	@Path("{id}/user/{userName}/role")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.ROLE)
 	public Response getRoleByTenantUserName(@PathParam("id") String tenantId, @PathParam("userName") String userName) {
 		try {
 			UserRoleView role = getRecursiveRole(tenantId, userName);
@@ -203,11 +211,12 @@ public class TenantResource {
 				// set the tenant id to the passed tenant id
 				role.setTenantId(tenantId);
 			}
-			return Response.ok().entity(role).build();
+			return Response.ok().entity(role).tag(String.join("->", tenantId, userName)).build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getRoleByTenantUserName hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(String.join("->", tenantId, userName))
+					.build();
 		}
 	}
 
@@ -221,15 +230,16 @@ public class TenantResource {
 	@GET
 	@Path("{id}/service/instances")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.INSTANCES)
 	public Response getTenantServiceInstances(@PathParam("id") String tenantId) {
 		try {
 			List<ServiceInstance> serviceInstances = ServiceInstancePersistenceWrapper
 					.getServiceInstancesInTenant(tenantId);
-			return Response.ok().entity(serviceInstances).build();
+			return Response.ok().entity(serviceInstances).tag(tenantId).build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getTenantServiceInstances hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(tenantId).build();
 		}
 	}
 
@@ -243,14 +253,16 @@ public class TenantResource {
 	@GET
 	@Path("{tenantId}/service/instance/{InstanceName}/access/info")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.ACCESSINFO)
 	public Response getTenantServiceInstanceAccessInfo(@PathParam("tenantId") String tenantId,
 			@PathParam("InstanceName") String InstanceName) {
 		try {
-			return Response.ok().entity(TenantUtils.getTenantServiceInstancesFromDf(tenantId, InstanceName)).build();
+			return Response.ok().entity(TenantUtils.getTenantServiceInstancesFromDf(tenantId, InstanceName))
+					.tag(InstanceName).build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getTenantServiceInstanceAccessInfo hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(InstanceName).build();
 		}
 
 	}
@@ -259,6 +271,7 @@ public class TenantResource {
 	@Path("{tenantId}/status")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
 	@Consumes(MediaType.APPLICATION_JSON)
+	@Audit(action = Action.UPDATE, targetType = TargetType.TENANT_LIFETIME)
 	public Response renewTenantLease(Tenant tenant, @Context HttpServletRequest request) {
 		try {
 			String loginUser = TokenPaserUtils.paserUserName(getToken(request));
@@ -269,16 +282,16 @@ public class TenantResource {
 						.entity(new ResourceResponseBean("operation failed",
 								"Current user has no privilege to do the operations.",
 								ResponseCodeConstant.NO_PERMISSION_ON_TENANT))
-						.build();
+						.tag(tenant.getName()).build();
 			}
 			synchronized (TenantLockerPool.getInstance().getLocker(tenant.getId())) {
 				TenantPersistenceWrapper.updateStatus(tenant);
-				return Response.ok().entity("Renew tenant lease successful!").build();
+				return Response.ok().entity("Renew tenant lease successful!").tag(tenant.getName()).build();
 			}
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("createTenant hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(tenant.getName()).build();
 		}
 	}
 
@@ -292,28 +305,34 @@ public class TenantResource {
 	@POST
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
 	@Consumes(MediaType.APPLICATION_JSON)
+	@Audit(action = Action.CREATE, targetType = TargetType.TENANT)
 	public Response createTenant(Tenant tenant, @Context HttpServletRequest request) {
 		try {
 			if (tenant.getName() == null || tenant.getId() == null) {
-				return Response.status(Status.BAD_REQUEST).entity("input format is not correct").build();
+				return Response.status(Status.BAD_REQUEST).entity("input format is not correct").tag(tenant.getName())
+						.build();
 			}
 
 			if (!TenantJsonParserUtils.isValidJsonString(tenant.getQuota())) {
-				return Response.status(Status.BAD_REQUEST).entity(new ResourceResponseBean("operation failed",
-						"tenant quota is invalid json format, please correct.", ResponseCodeConstant.BAD_REQUEST))
-						.build();
+				return Response.status(Status.BAD_REQUEST)
+						.entity(new ResourceResponseBean("operation failed",
+								"tenant quota is invalid json format, please correct.",
+								ResponseCodeConstant.BAD_REQUEST))
+						.tag(tenant.getName()).build();
 			}
 
 			if (tenant.getParentId() == null || tenant.getParentId().isEmpty()) {
 				return Response.status(Status.NOT_ACCEPTABLE)
-						.entity("Parent tenant must be specified and parentID must not be null.").build();
+						.entity("Parent tenant must be specified and parentID must not be null.").tag(tenant.getName())
+						.build();
 			}
 
 			// if the tenant have the instances
 			// can NOT create chlid tenant
 			if (tenant.getParentId() != null && hasInstances(tenant.getParentId())) {
 				return Response.status(Status.NOT_ACCEPTABLE)
-						.entity("The parent tenant have service instances, can NOT create child tenant.").build();
+						.entity("The parent tenant have service instances, can NOT create child tenant.")
+						.tag(tenant.getName()).build();
 			}
 
 			String loginUser = TokenPaserUtils.paserUserName(getToken(request));
@@ -325,7 +344,7 @@ public class TenantResource {
 							.entity(new ResourceResponseBean("operation failed",
 									"Current user has no privilege to do the operations.",
 									ResponseCodeConstant.NO_PERMISSION_ON_TENANT))
-							.build();
+							.tag(tenant.getName()).build();
 				}
 			}
 
@@ -335,17 +354,19 @@ public class TenantResource {
 				if (!tenantRes.getCheckerRes().isCanChange()) {
 					logger.error("Failed to create tenant due to exceeded parent tenant quota: "
 							+ tenantRes.getCheckerRes().getMessages());
-					return Response.status(Status.NOT_ACCEPTABLE).entity(new ResourceResponseBean("operation failed",
-							tenantRes.getCheckerRes().getMessages(), ResponseCodeConstant.EXCEED_PARENT_TENANT_QUOTA))
-							.build();
+					return Response.status(Status.NOT_ACCEPTABLE)
+							.entity(new ResourceResponseBean("operation failed",
+									tenantRes.getCheckerRes().getMessages(),
+									ResponseCodeConstant.EXCEED_PARENT_TENANT_QUOTA))
+							.tag(tenant.getName()).build();
 				}
 				TenantLockerPool.getInstance().register(tenant);
-				return Response.ok().entity(tenantRes.getTenantBean()).build();
+				return Response.ok().entity(tenantRes.getTenantBean()).tag(tenant.getName()).build();
 			}
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("createTenant hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(tenant.getName()).build();
 		}
 	}
 
@@ -398,25 +419,11 @@ public class TenantResource {
 	@Path("{id}/service/instance")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
 	@Consumes(MediaType.APPLICATION_JSON)
+	@Audit(action = Action.CREATE, targetType = TargetType.INSTANCE)
 	public Response createServiceInstanceInTenant(@PathParam("id") String tenantId, String reqBodyStr,
 			@Context HttpServletRequest request) {
-
+		String cuzbisNameString = null;
 		try {
-			String loginUser = TokenPaserUtils.paserUserName(getToken(request));
-			if (!isSysadmin(loginUser)) {
-				UserRoleView role = UserRoleViewPersistenceWrapper.getRoleBasedOnUserAndTenant(loginUser, tenantId);
-				if (!privilegedOnTenant(role, tenantId)) {
-					logger.error("Current user " + loginUser + " has no privilege on tenant " + tenantId
-							+ ". User may not be tenant.admin of current tenant, or the tenant is out of lifecycle");
-					return Response.status(Status.UNAUTHORIZED)
-							.entity(new ResourceResponseBean("operation failed",
-									"Current user has no privilege to do the operations.",
-									ResponseCodeConstant.NO_PERMISSION_ON_TENANT))
-							.build();
-				}
-			}
-
-			// parse the req body make sure it is json
 			JsonElement reqBodyJson = new JsonParser().parse(reqBodyStr);
 
 			// when custom the bsi name shoud check
@@ -427,6 +434,21 @@ public class TenantResource {
 			JsonObject parameters = reqBodyJson.getAsJsonObject().getAsJsonObject("spec")
 					.getAsJsonObject("provisioning").getAsJsonObject("parameters");
 			JsonElement cuzBsiNameJE = parameters.get("cuzBsiName");
+			cuzbisNameString = cuzBsiNameJE.getAsString();
+
+			String loginUser = TokenPaserUtils.paserUserName(getToken(request));
+			if (!isSysadmin(loginUser)) {
+				UserRoleView role = UserRoleViewPersistenceWrapper.getRoleBasedOnUserAndTenant(loginUser, tenantId);
+				if (!privilegedOnTenant(role, tenantId)) {
+					logger.error("Current user " + loginUser + " has no privilege on tenant " + tenantId
+							+ ". User may not be tenant.admin of current tenant, or the tenant is out of lifecycle");
+					return Response.status(Status.UNAUTHORIZED)
+							.entity(new ResourceResponseBean("operation failed",
+									"Current user has no privilege to do the operations.",
+									ResponseCodeConstant.NO_PERMISSION_ON_TENANT))
+							.tag(cuzbisNameString).build();
+				}
+			}
 
 			if (metadataName.indexOf("-") != -1) {
 				logger.error("The service instance name can NOT include dash (-), " + "please try antoher name.");
@@ -434,7 +456,7 @@ public class TenantResource {
 						.entity(new ResourceResponseBean("operation failed",
 								"The service instance name can NOT include dash (-), " + "please try antoher name.",
 								ResponseCodeConstant.BAD_REQUEST))
-						.build();
+						.tag(cuzbisNameString).build();
 			}
 
 			// check exist custom bsiName
@@ -448,7 +470,7 @@ public class TenantResource {
 					return Response.status(Status.CONFLICT)
 							.entity(new ResourceResponseBean("operation failed",
 									"Resource name already exist in OCDP cluster.", ResponseCodeConstant.CONFLICT))
-							.build();
+							.tag(cuzbisNameString).build();
 				}
 			}
 
@@ -468,19 +490,19 @@ public class TenantResource {
 								.entity(new ResourceResponseBean("operation failed",
 										serviceInstRes.getCheckerRes().getMessages(),
 										ResponseCodeConstant.EXCEED_PARENT_TENANT_QUOTA))
-								.build();
+								.tag(cuzbisNameString).build();
 					}
 				}
 				String resBody = ServiceInstanceUtils.createBsi(tenantId, reqBodyJson);
 				serviceInstRes.setResBody(resBody);
 			}
 
-			return Response.ok().entity(serviceInstRes.getResBody()).build();
+			return Response.ok().entity(serviceInstRes.getResBody()).tag(cuzbisNameString).build();
 
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("createServiceInstanceInTenant hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(cuzbisNameString).build();
 		}
 
 	}
@@ -497,6 +519,7 @@ public class TenantResource {
 	@Path("{id}/service/instance/{instanceName}")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
 	@Consumes(MediaType.APPLICATION_JSON)
+	@Audit(action = Action.UPDATE, targetType = TargetType.INSTANCE)
 	public Response updateServiceInstanceInTenant(@PathParam("id") String tenantId,
 			@PathParam("instanceName") String instanceName, String parametersStr, @Context HttpServletRequest request) {
 
@@ -511,7 +534,7 @@ public class TenantResource {
 							.entity(new ResourceResponseBean("operation failed",
 									"Current user has no privilege to do the operations.",
 									ResponseCodeConstant.NO_PERMISSION_ON_TENANT))
-							.build();
+							.tag(instanceName).build();
 				}
 			}
 
@@ -526,13 +549,13 @@ public class TenantResource {
 				logger.info(
 						"updateServiceInstanceInTenant -> The instance can not be updated when it is Provisioning!");
 				return Response.status(Status.BAD_REQUEST)
-						.entity("The instance can not be updated when it is Provisioning!").build();
+						.entity("The instance can not be updated when it is Provisioning!").tag(instanceName).build();
 			}
 
 			if (phase.equals(Constant.FAILURE)) {
 				logger.info("updateServiceInstanceInTenant -> The instance can not be updated when it is Failure!");
 				return Response.status(Status.BAD_REQUEST).entity("The instance can not be updated when it is Failure!")
-						.build();
+						.tag(instanceName).build();
 			}
 
 			// get the provisioning json
@@ -576,12 +599,14 @@ public class TenantResource {
 								.entity(new ResourceResponseBean("operation failed",
 										serviceInstRes.getCheckerRes().getMessages(),
 										ResponseCodeConstant.EXCEED_PARENT_TENANT_QUOTA))
-								.build();
+								.tag(instanceName).build();
 					}
 				} catch (Exception e) {
 					logger.error("Failed to update bsi due to exceeded tenant quota: " + e.getMessage());
-					return Response.status(Status.NOT_ACCEPTABLE).entity(new ResourceResponseBean("operation failed",
-							e.getMessage(), ResponseCodeConstant.EXCEED_PARENT_TENANT_QUOTA)).build();
+					return Response
+							.status(Status.NOT_ACCEPTABLE).entity(new ResourceResponseBean("operation failed",
+									e.getMessage(), ResponseCodeConstant.EXCEED_PARENT_TENANT_QUOTA))
+							.tag(instanceName).build();
 				}
 
 				//add REQUEST_NUMBER and REQUEST_SIZE to parameter
@@ -617,12 +642,12 @@ public class TenantResource {
 					this.updateOCMDatabase(parametersStr, tenantId, instanceName);
 				}
 
-				return Response.ok().entity(responseBean.getMessage()).build();
+				return Response.ok().entity(responseBean.getMessage()).tag(instanceName).build();
 			}
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("updateServiceInstanceInTenant hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(instanceName).build();
 		}
 	}
 
@@ -716,6 +741,7 @@ public class TenantResource {
 	@Path("{id}/service/instance/{instanceName}")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
 	@Consumes(MediaType.APPLICATION_JSON)
+	@Audit(action = Action.DELETE, targetType = TargetType.INSTANCE)
 	public Response deleteServiceInstanceInTenant(@PathParam("id") String tenantId,
 			@PathParam("instanceName") String instanceName, @Context HttpServletRequest request) {
 
@@ -730,7 +756,7 @@ public class TenantResource {
 							.entity(new ResourceResponseBean("operation failed",
 									"Current user has no privilege to do the operations.",
 									ResponseCodeConstant.NO_PERMISSION_ON_TENANT))
-							.build();
+							.tag(instanceName).build();
 				}
 			}
 
@@ -744,10 +770,9 @@ public class TenantResource {
 				String phase = instance.getAsJsonObject("status").get("phase").getAsString();
 
 				if (phase.equals(Constant.PROVISIONING)) {
-					logger.info(
-							"Instance [{}] can not be deleted when it is Provisioning!", instanceName);
+					logger.info("Instance [{}] can not be deleted when it is Provisioning!", instanceName);
 					return Response.status(Status.BAD_REQUEST)
-							.entity("Tnstance can not be deleted when it is Provisioning!").build();
+							.entity("Tnstance can not be deleted when it is Provisioning!").tag(instanceName).build();
 				}
 
 				// get binding info
@@ -798,7 +823,7 @@ public class TenantResource {
 						}
 						String bodyStr = EntityUtils.toString(response1.getEntity());
 
-						return Response.ok().entity(bodyStr).build();
+						return Response.ok().entity(bodyStr).tag(instanceName).build();
 					} finally {
 						response1.close();
 					}
@@ -808,7 +833,7 @@ public class TenantResource {
 			}
 		} catch (Exception e) {
 			logger.error("Exception while deleting instance : " + instanceName, e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(instanceName).build();
 		}
 
 	}
@@ -823,19 +848,22 @@ public class TenantResource {
 	@PUT
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
 	@Consumes(MediaType.APPLICATION_JSON)
+	@Audit(action = Action.UPDATE, targetType = TargetType.TENANT)
 	public Response updateTenant(Tenant tenant, @Context HttpServletRequest request) {
 
 		try {
 			if (!TenantJsonParserUtils.isValidJsonString(tenant.getQuota())) {
-				return Response.status(Status.BAD_REQUEST).entity(new ResourceResponseBean("operation failed",
-						"tenant quota is invalid json format, please correct.", ResponseCodeConstant.BAD_REQUEST))
-						.build();
+				return Response.status(Status.BAD_REQUEST)
+						.entity(new ResourceResponseBean("operation failed",
+								"tenant quota is invalid json format, please correct.",
+								ResponseCodeConstant.BAD_REQUEST))
+						.tag(tenant.getName()).build();
 			}
 
 			logger.info("updateTenant -> start update");
 
 			if (tenant.getId() == null) {
-				return Response.status(Status.BAD_REQUEST).entity("tenant id is null").build();
+				return Response.status(Status.BAD_REQUEST).entity("tenant id is null").tag(tenant.getName()).build();
 			}
 			String loginUser = TokenPaserUtils.paserUserName(getToken(request));
 			if (!isSysadmin(loginUser)) {
@@ -846,7 +874,7 @@ public class TenantResource {
 							.entity(new ResourceResponseBean("operation failed",
 									"Current user has no privilege to do the operations.",
 									ResponseCodeConstant.NO_PERMISSION_ON_TENANT))
-							.build();
+							.tag(tenant.getName()).build();
 				}
 			}
 
@@ -856,7 +884,7 @@ public class TenantResource {
 						.entity(new ResourceResponseBean("operation failed",
 								"the tenant is NOT existed in the OCManager, please input a correct one.",
 								ResponseCodeConstant.BAD_REQUEST))
-						.build();
+						.tag(tenant.getName()).build();
 			}
 
 			synchronized (TenantLockerPool.getInstance()
@@ -865,18 +893,20 @@ public class TenantResource {
 				if (!tenantRes.getCheckerRes().isCanChange()) {
 					logger.error("Failed to update tenant due to exceeded parent tenant quota: "
 							+ tenantRes.getCheckerRes().getMessages());
-					return Response.status(Status.NOT_ACCEPTABLE).entity(new ResourceResponseBean("operation failed",
-							tenantRes.getCheckerRes().getMessages(), ResponseCodeConstant.EXCEED_PARENT_TENANT_QUOTA))
-							.build();
+					return Response.status(Status.NOT_ACCEPTABLE)
+							.entity(new ResourceResponseBean("operation failed",
+									tenantRes.getCheckerRes().getMessages(),
+									ResponseCodeConstant.EXCEED_PARENT_TENANT_QUOTA))
+							.tag(tenant.getName()).build();
 				}
 			}
 
-			return Response.ok().entity(new TenantBean(tenant, "no dataFoundryInfo")).build();
+			return Response.ok().entity(new TenantBean(tenant, "no dataFoundryInfo")).tag(tenant.getName()).build();
 
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("updateTenant hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(tenant.getName()).build();
 		}
 	}
 
@@ -928,29 +958,32 @@ public class TenantResource {
 	@Path("{id}")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
 	@Consumes(MediaType.APPLICATION_JSON)
+	@Audit(action = Action.DELETE, targetType = TargetType.TENANT)
 	public Response deleteTenant(@PathParam("id") String tenantId, @Context HttpServletRequest request) {
 		try {
 			String loginUser = TokenPaserUtils.paserUserName(getToken(request));
 			if (!isSysadmin(loginUser)) {
 				logger.error("Only sysadmin can do this operation. User: " + loginUser);
-				return Response.status(Status.UNAUTHORIZED).entity(new ResourceResponseBean("operation failed",
-						"Current user has no privilege to do the operations.", ResponseCodeConstant.NOT_SYSTEM_ADMIN))
-						.build();
+				return Response.status(Status.UNAUTHORIZED)
+						.entity(new ResourceResponseBean("operation failed",
+								"Current user has no privilege to do the operations.",
+								ResponseCodeConstant.NOT_SYSTEM_ADMIN))
+						.tag(tenantId).build();
 			}
 
 			if (!isLeafTenant(tenantId)) {
-				return Response.status(Status.NOT_ACCEPTABLE)
+				return Response.status(Status.NOT_ACCEPTABLE).tag(tenantId)
 						.entity("The tenant can not be deleted, because it have sub-tenants.").build();
 			}
 
 			// if have instances can not be deleted
 			if (hasInstances(tenantId)) {
-				return Response.status(Status.NOT_ACCEPTABLE)
+				return Response.status(Status.NOT_ACCEPTABLE).tag(tenantId)
 						.entity("The tenant can not be deleted, because it have service instances on it.").build();
 			}
 			// if have users can not be deleted
 			if (hasUsers(tenantId)) {
-				return Response.status(Status.NOT_ACCEPTABLE)
+				return Response.status(Status.NOT_ACCEPTABLE).tag(tenantId)
 						.entity("The tenant can not be deleted, because it have users binding with it.").build();
 			}
 			int statusCode = -1;
@@ -981,7 +1014,7 @@ public class TenantResource {
 							}
 							String bodyStr = EntityUtils.toString(response1.getEntity());
 
-							return Response.ok().entity(new TenantBean(tenant, bodyStr)).build();
+							return Response.ok().entity(new TenantBean(tenant, bodyStr)).tag(tenantId).build();
 						} finally {
 							response1.close();
 						}
@@ -998,7 +1031,7 @@ public class TenantResource {
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("deleteTenant hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(tenantId).build();
 		}
 	}
 
@@ -1051,8 +1084,11 @@ public class TenantResource {
 	@Path("{id}/user/role/assignment")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
 	@Consumes(MediaType.APPLICATION_JSON)
+	@Audit(action = Action.ASSIGN, targetType = TargetType.ASSIGNMENT)
 	public Response assignRoleToUserInTenant(@PathParam("id") String tenantId, TenantUserRoleAssignment assignment,
 			@Context HttpServletRequest request) {
+		// assgin to the input tenant
+		assignment.setTenantId(tenantId);
 
 		try {
 			String loginUser = TokenPaserUtils.paserUserName(getToken(request));
@@ -1065,12 +1101,9 @@ public class TenantResource {
 							.entity(new ResourceResponseBean("operation failed",
 									"Current user has no privilege to do the operations.",
 									ResponseCodeConstant.NO_PERMISSION_ON_TENANT))
-							.build();
+							.tag(assignment.toString()).build();
 				}
 			}
-
-			// assgin to the input tenant
-			assignment.setTenantId(tenantId);
 
 			// get all service instances from df
 			String allServiceInstances = TenantUtils.getTenantAllServiceInstancesFromDf(tenantId);
@@ -1087,12 +1120,12 @@ public class TenantResource {
 
 			assignment = TURAssignmentPersistenceWrapper.assignRoleToUserInTenant(assignment);
 
-			return Response.ok().entity(assignment).build();
+			return Response.ok().entity(assignment).tag(assignment.toString()).build();
 
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("assignRoleToUserInTenant hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(assignment.toString()).build();
 		}
 
 	}
@@ -1108,10 +1141,14 @@ public class TenantResource {
 	@Path("{id}/user/role/assignment")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
 	@Consumes(MediaType.APPLICATION_JSON)
+	@Audit(action = Action.UPDATE, targetType = TargetType.ASSIGNMENT)
 	public Response updateRoleToUserInTenant(@PathParam("id") String tenantId, TenantUserRoleAssignment assignment,
 			@Context HttpServletRequest request) {
 
 		try {
+			// assgin to the input tenant
+			assignment.setTenantId(tenantId);
+
 			String loginUser = TokenPaserUtils.paserUserName(getToken(request));
 			if (!isSysadmin(loginUser)) {
 				UserRoleView role = UserRoleViewPersistenceWrapper.getRoleBasedOnUserAndTenant(loginUser, tenantId);
@@ -1122,12 +1159,9 @@ public class TenantResource {
 							.entity(new ResourceResponseBean("operation failed",
 									"Current user has no privilege to do the operations.",
 									ResponseCodeConstant.NO_PERMISSION_ON_TENANT))
-							.build();
+							.tag(assignment.toString()).build();
 				}
 			}
-
-			// assgin to the input tenant
-			assignment.setTenantId(tenantId);
 
 			// get all service instances from df
 			String allServiceInstances = TenantUtils.getTenantAllServiceInstancesFromDf(tenantId);
@@ -1143,12 +1177,12 @@ public class TenantResource {
 
 			assignment = TURAssignmentPersistenceWrapper.updateRoleToUserInTenant(assignment);
 
-			return Response.ok().entity(assignment).build();
+			return Response.ok().entity(assignment).tag(assignment.toString()).build();
 
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("updateRoleToUserInTenant hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(assignment.toString()).build();
 		}
 
 	}
@@ -1164,6 +1198,7 @@ public class TenantResource {
 	@Path("{id}/user/{userId}/role/assignment")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
 	@Consumes(MediaType.APPLICATION_JSON)
+	@Audit(action = Action.UNASSIGN, targetType = TargetType.ASSIGNMENT)
 	public Response unassignRoleFromUserInTenant(@PathParam("id") String tenantId, @PathParam("userId") String userId,
 			@Context HttpServletRequest request) {
 
@@ -1178,7 +1213,7 @@ public class TenantResource {
 							.entity(new ResourceResponseBean("operation failed",
 									"Current user has no privilege to do the operations.",
 									ResponseCodeConstant.NO_PERMISSION_ON_TENANT))
-							.build();
+							.tag(String.join("->", tenantId, userId)).build();
 				}
 			}
 
@@ -1197,12 +1232,14 @@ public class TenantResource {
 
 			TURAssignmentPersistenceWrapper.unassignRoleFromUserInTenant(tenantId, userId);
 
-			return Response.ok().entity(new ResourceResponseBean("delete success", userId, 200)).build();
+			return Response.ok().entity(new ResourceResponseBean("delete success", userId, 200))
+					.tag(String.join("->", tenantId, userId)).build();
 
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("unassignRoleFromUserInTenant hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(String.join("->", tenantId, userId))
+					.build();
 		}
 
 	}
@@ -1216,6 +1253,7 @@ public class TenantResource {
 	@GET
 	@Path("{tenantId}/quotas")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.QUOTAS)
 	public Response getTenantQuotas(@PathParam("tenantId") String tenantId) {
 		try {
 			TenantQuotaResponse rsp = new TenantQuotaResponse(tenantId);
@@ -1231,10 +1269,10 @@ public class TenantResource {
 					throw new RuntimeException("Exception while getting tenant quota: ", e2);
 				}
 			});
-			return Response.ok().entity(rsp).build();
+			return Response.ok().entity(rsp).tag(tenantId).build();
 		} catch (Exception e) {
 			logger.error("getTenantQuotas hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(tenantId).build();
 		}
 
 	}

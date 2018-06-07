@@ -20,6 +20,9 @@ import javax.ws.rs.core.Response.Status;
 
 import org.apache.log4j.Logger;
 
+import com.asiainfo.ocmanager.audit.Audit;
+import com.asiainfo.ocmanager.audit.Audit.Action;
+import com.asiainfo.ocmanager.audit.Audit.TargetType;
 import com.asiainfo.ocmanager.auth.Authenticator;
 import com.asiainfo.ocmanager.auth.LdapWrapper;
 import com.asiainfo.ocmanager.auth.utils.TokenPaserUtils;
@@ -147,6 +150,7 @@ public class UserResource {
 	 */
 	@GET
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.USERS)
 	public Response getUsers() {
 		try {
 			List<User> users = UserPersistenceWrapper.getUsers();
@@ -166,6 +170,7 @@ public class UserResource {
 	@GET
 	@Path("ldap")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.LDAP_USERS)
 	public Response listLdapUsers() {
 		try {
 			List<String> users = LdapWrapper.allUsers();
@@ -187,28 +192,30 @@ public class UserResource {
 	@GET
 	@Path("id/{id}")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.USER)
 	public Response getUserById(@PathParam("id") String userId) {
 		try {
 			User user = UserPersistenceWrapper.getUserById(userId);
-			return Response.ok().entity(user == null ? new User() : user).build();
+			return Response.ok().entity(user == null ? new User() : user).tag(userId).build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getUserById hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(userId).build();
 		}
 	}
 
 	@GET
 	@Path("name/{userName}")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.USER)
 	public Response getUserByName(@PathParam("userName") String userName) {
 		try {
 			User user = UserPersistenceWrapper.getUserByName(userName);
-			return Response.ok().entity(user == null ? new User() : user).build();
+			return Response.ok().entity(user == null ? new User() : user).tag(userName).build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getUserById hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(userName).build();
 		}
 	}
 
@@ -222,6 +229,7 @@ public class UserResource {
 	@POST
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
 	@Consumes(MediaType.APPLICATION_JSON)
+	@Audit(action = Action.CREATE, targetType = TargetType.USER)
 	public Response createUser(User user, @Context HttpServletRequest request) {
 		try {
 			String token = request.getHeader("token");
@@ -230,7 +238,7 @@ public class UserResource {
 						.entity(new ResourceResponseBean("create user failed",
 								"token is null or empty, please check the token in request header.",
 								ResponseCodeConstant.EMPTY_TOKEN))
-						.build();
+						.tag(user.getUsername()).build();
 			}
 
 			String loginUser = TokenPaserUtils.paserUserName(token);
@@ -244,31 +252,34 @@ public class UserResource {
 						.entity(new ResourceResponseBean("create user failed",
 								"the user is not system admin role, does NOT have the create user permission.",
 								ResponseCodeConstant.NO_CREATE_USER_PERMISSION))
-						.build();
+						.tag(user.getUsername()).build();
 			}
 
 			if (!appendUser2Rangers(user)) {
 				logger.error("Failed to append user to Ranger: " + user);
-				return Response.status(Status.BAD_REQUEST).entity("Failed to append user to Ranger: " + user).build();
+				return Response.status(Status.BAD_REQUEST).entity("Failed to append user to Ranger: " + user)
+						.tag(user.getUsername()).build();
 			}
 
 			user = UserPersistenceWrapper.createUser(user);
-			return Response.ok().entity(user).build();
+			return Response.ok().entity(user).tag(user.getUsername()).build();
 
 		} catch (Exception e) {
 			if (e.getCause() instanceof MySQLIntegrityConstraintViolationException) {
 				MySQLIntegrityConstraintViolationException newExp = (MySQLIntegrityConstraintViolationException) e
 						.getCause();
 				if (newExp.getErrorCode() == 1062) {
-					return Response.status(Status.CONFLICT).entity(new ResourceResponseBean("create user failed",
-							"the user" + user.getUsername() + "is already existed", ResponseCodeConstant.USER_EXIST))
-							.build();
+					return Response.status(Status.CONFLICT)
+							.entity(new ResourceResponseBean("create user failed",
+									"the user" + user.getUsername() + "is already existed",
+									ResponseCodeConstant.USER_EXIST))
+							.tag(user.getUsername()).build();
 				}
 			}
 
 			// system out the exception into the console log
 			logger.error("createUser hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(user.getUsername()).build();
 
 		}
 	}
@@ -316,6 +327,7 @@ public class UserResource {
 	@Path("id/{userId}")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
 	@Consumes(MediaType.APPLICATION_JSON)
+	@Audit(action = Action.UPDATE, targetType = TargetType.USER)
 	public Response updateUserById(@PathParam("userId") String userId, User user, @Context HttpServletRequest request) {
 		try {
 			String token = request.getHeader("token");
@@ -324,7 +336,7 @@ public class UserResource {
 						.entity(new ResourceResponseBean("update user failed",
 								"token is null or empty, please check the token in request header.",
 								ResponseCodeConstant.EMPTY_TOKEN))
-						.build();
+						.tag(user.getUsername()).build();
 			}
 
 			String loginUser = TokenPaserUtils.paserUserName(token);
@@ -341,18 +353,18 @@ public class UserResource {
 							.entity(new ResourceResponseBean("update user failed",
 									"the user is not system admin role, does NOT have the update user permission.",
 									ResponseCodeConstant.NO_UPDATE_USER_PERMISSION))
-							.build();
+							.tag(user.getUsername()).build();
 				}
 			}
 
 			user.setId(userId);
 			user = UserPersistenceWrapper.updateUser(user);
-			return Response.ok().entity(user).build();
+			return Response.ok().entity(user).tag(user.getUsername()).build();
 
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("updateUserById hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(user.getUsername()).build();
 		}
 	}
 
@@ -360,6 +372,7 @@ public class UserResource {
 	@Path("name/{userName}")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
 	@Consumes(MediaType.APPLICATION_JSON)
+	@Audit(action = Action.UPDATE, targetType = TargetType.USER)
 	public Response updateUserByName(@PathParam("userName") String userName, User user,
 			@Context HttpServletRequest request) {
 		try {
@@ -369,7 +382,7 @@ public class UserResource {
 						.entity(new ResourceResponseBean("update user failed",
 								"token is null or empty, please check the token in request header.",
 								ResponseCodeConstant.EMPTY_TOKEN))
-						.build();
+						.tag(userName).build();
 			}
 
 			String loginUser = TokenPaserUtils.paserUserName(token);
@@ -384,18 +397,18 @@ public class UserResource {
 							.entity(new ResourceResponseBean("update user failed",
 									"the user is not system admin role, does NOT have the update user permission.",
 									ResponseCodeConstant.NO_UPDATE_USER_PERMISSION))
-							.build();
+							.tag(userName).build();
 				}
 			}
 
 			user.setUsername(userName);
 			user = UserPersistenceWrapper.updateUserByName(user);
-			return Response.ok().entity(user).build();
+			return Response.ok().entity(user).tag(userName).build();
 
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("updateUserByName hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(userName).build();
 		}
 	}
 
@@ -403,6 +416,7 @@ public class UserResource {
 	@Path("{userName}/password")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
 	@Consumes(MediaType.APPLICATION_JSON)
+	@Audit(action = Action.UPDATE, targetType = TargetType.USER)
 	public Response updateUserPassword(@PathParam("userName") String userName, PasswordBean password,
 			@Context HttpServletRequest request) {
 		try {
@@ -413,7 +427,7 @@ public class UserResource {
 						.entity(new ResourceResponseBean("update user password failed",
 								"token is null or empty, please check the token in request header.",
 								ResponseCodeConstant.EMPTY_TOKEN))
-						.build();
+						.tag(userName).build();
 			}
 
 			String loginUser = TokenPaserUtils.paserUserName(token);
@@ -427,7 +441,7 @@ public class UserResource {
 					return Response.status(Status.UNAUTHORIZED).entity(new ResourceResponseBean(
 							"update user password failed",
 							"the user is not system admin role or it is NOT change itself password, does NOT have the update user password permission.",
-							ResponseCodeConstant.NO_UPDATE_USER_PASSWORD_PERMISSION)).build();
+							ResponseCodeConstant.NO_UPDATE_USER_PASSWORD_PERMISSION)).tag(userName).build();
 				}
 			}
 
@@ -435,11 +449,11 @@ public class UserResource {
 			Authenticator.logout(userName);
 			return Response.ok().entity(
 					new ResourceResponseBean("update user password success", userName, ResponseCodeConstant.SUCCESS))
-					.build();
+					.tag(userName).build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("updateUserPassword hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(userName).build();
 		}
 	}
 
@@ -452,6 +466,7 @@ public class UserResource {
 	@DELETE
 	@Path("{id}")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.DELETE, targetType = TargetType.USER)
 	public Response deleteUser(@PathParam("id") String userId, @Context HttpServletRequest request) {
 		String userName = null;
 		try {
@@ -462,7 +477,7 @@ public class UserResource {
 						.entity(new ResourceResponseBean("delete user failed",
 								"token is null or empty, please check the token in request header.",
 								ResponseCodeConstant.EMPTY_TOKEN))
-						.build();
+						.tag(userName).build();
 			}
 
 			String loginUser = TokenPaserUtils.paserUserName(token);
@@ -476,14 +491,16 @@ public class UserResource {
 						.entity(new ResourceResponseBean("delete user failed",
 								"the user is not system admin role, does NOT have the delete user permission.",
 								ResponseCodeConstant.NO_DELETE_USER_PERMISSION))
-						.build();
+						.tag(userName).build();
 			}
 
 			User user = UserPersistenceWrapper.getUserById(userId);
 
 			if (user == null) {
-				return Response.status(Status.NOT_FOUND).entity(new ResourceResponseBean("delete user failed",
-						"The user " + userId + "can not find.", ResponseCodeConstant.USER_NOT_FOUND)).build();
+				return Response
+						.status(Status.NOT_FOUND).entity(new ResourceResponseBean("delete user failed",
+								"The user " + userId + "can not find.", ResponseCodeConstant.USER_NOT_FOUND))
+						.tag(userName).build();
 			}
 
 			userName = user.getUsername();
@@ -493,7 +510,7 @@ public class UserResource {
 
 			return Response.ok()
 					.entity(new ResourceResponseBean("delete user success", userId, ResponseCodeConstant.SUCCESS))
-					.build();
+					.tag(userName).build();
 
 		} catch (Exception e) {
 			if (e.getCause() instanceof MySQLIntegrityConstraintViolationException) {
@@ -508,11 +525,11 @@ public class UserResource {
 								"The user is assign with the tenants: [" + tenants.toString()
 										+ "], please unassign the user, then try to delete it again.",
 								ResponseCodeConstant.USER_CAN_NOT_DELETE))
-						.build();
+						.tag(userName).build();
 			} else {
 				// system out the exception into the console log
 				logger.error("deleteUser  hit exception -> ", e);
-				return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+				return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(userName).build();
 			}
 		}
 	}
@@ -582,6 +599,7 @@ public class UserResource {
 	@GET
 	@Path("id/{id}/all/tenants")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.TENANTS)
 	public Response getTenantsById(@PathParam("id") String userId) {
 		try {
 			List<UserRoleView> turs = UserRoleViewPersistenceWrapper.getTenantAndRoleBasedOnUserId(userId);
@@ -593,10 +611,10 @@ public class UserResource {
 				tenantList.addAll(TenantTreeUtil.transform(nodes));
 			}
 
-			return Response.ok().entity(TenantUtils.removeListDup(tenantList)).build();
+			return Response.ok().entity(TenantUtils.removeListDup(tenantList)).tag(userId).build();
 		} catch (Exception e) {
 			logger.error("Error while getting Tenants by user id: " + userId, e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(userId).build();
 		}
 	}
 
@@ -608,6 +626,7 @@ public class UserResource {
 	@GET
 	@Path("name/{name}/all/tenants")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.TENANTS)
 	public Response getTenantsByName(@PathParam("name") String userName) {
 		try {
 			List<Tenant> tenantList = new ArrayList<Tenant>();
@@ -618,16 +637,17 @@ public class UserResource {
 				tenantList.addAll(TenantTreeUtil.transform(allNodes));
 			}
 			logger.info("getTenantsByName -> " + userName);
-			return Response.ok().entity(TenantUtils.removeListDup(tenantList)).build();
+			return Response.ok().entity(TenantUtils.removeListDup(tenantList)).tag(userName).build();
 		} catch (Exception e) {
 			logger.error("Error while getting Tenants by user name: " + userName, e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(userName).build();
 		}
 	}
 
 	@GET
 	@Path("id/{id}/tenant/{tenantId}/children/tenants")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.TENANTS)
 	public Response getChildrenTenantsByUserIdTenantId(@PathParam("id") String userId,
 			@PathParam("tenantId") String tenantId) {
 		try {
@@ -653,17 +673,19 @@ public class UserResource {
 				}
 			}
 
-			return Response.ok().entity(children).build();
+			return Response.ok().entity(children).tag(String.join("->", tenantId, userId)).build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getChildrenTenantsByUserIdTenantId hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(String.join("->", tenantId, userId))
+					.build();
 		}
 	}
 
 	@GET
 	@Path("name/{name}/tenant/{tenantId}/children/tenants")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.TENANTS)
 	public Response getChildrenTenantsByUserNameTenantId(@PathParam("name") String userName,
 			@PathParam("tenantId") String tenantId) {
 		try {
@@ -689,11 +711,12 @@ public class UserResource {
 				}
 			}
 
-			return Response.ok().entity(children).build();
+			return Response.ok().entity(children).tag(String.join("->", tenantId, userName)).build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getChildrenTenantsByUserNameTenantId  hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(String.join("->", tenantId, userName))
+					.build();
 		}
 	}
 
@@ -719,6 +742,7 @@ public class UserResource {
 	@GET
 	@Path("name/{userName}/tenant/{tenantId}/assignments/info")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.ASSIGNMENT)
 	public Response getAssignmentsInfoForUser(@PathParam("userName") String userName,
 			@PathParam("tenantId") String tenantId) {
 		try {
@@ -839,24 +863,24 @@ public class UserResource {
 						AssignmentInfoBean AIB = new AssignmentInfoBean(instace.getInstanceName(),
 								"Privilege Not Assigned", phase, actionString, patchString);
 						assignmentInfoBeans.add(AIB);
-					}else {
-						AssignmentInfoBean AIB = new AssignmentInfoBean(instace.getInstanceName(),
-								"Unknown BSI Status", phase, actionString, patchString);
+					} else {
+						AssignmentInfoBean AIB = new AssignmentInfoBean(instace.getInstanceName(), "Unknown BSI Status",
+								phase, actionString, patchString);
 						assignmentInfoBeans.add(AIB);
 					} 
 					break;
 				case Constant.BOUND:
 					if (inList(spec, userName)) {
-						AssignmentInfoBean AIB = new AssignmentInfoBean(instace.getInstanceName(),
-								"Privilege Assigned", phase, actionString, patchString);
-						assignmentInfoBeans.add(AIB);					
-					}else if (patch == null && action != null && action.getAsString().equals(Constant._TOUNBIND)) {
+						AssignmentInfoBean AIB = new AssignmentInfoBean(instace.getInstanceName(), "Privilege Assigned",
+								phase, actionString, patchString);
+						assignmentInfoBeans.add(AIB);
+					} else if (patch == null && action != null && action.getAsString().equals(Constant._TOUNBIND)) {
 						AssignmentInfoBean AIB = new AssignmentInfoBean(instace.getInstanceName(),
 								"Privilege Unassignment Running", phase, actionString, patchString);
-						assignmentInfoBeans.add(AIB);	
-					}else {
-						AssignmentInfoBean AIB = new AssignmentInfoBean(instace.getInstanceName(),
-								"Unknown BSI Status", phase, actionString, patchString);
+						assignmentInfoBeans.add(AIB);
+					} else {
+						AssignmentInfoBean AIB = new AssignmentInfoBean(instace.getInstanceName(), "Unknown BSI Status",
+								phase, actionString, patchString);
 						assignmentInfoBeans.add(AIB);
 					}
 					break;
@@ -864,27 +888,28 @@ public class UserResource {
 					if (action == null && patch == null) {
 						AssignmentInfoBean AIB = new AssignmentInfoBean(instace.getInstanceName(),
 								"BSI Provision Failed", phase, actionString, patchString);
-						assignmentInfoBeans.add(AIB);					}
-					else {
-						AssignmentInfoBean AIB = new AssignmentInfoBean(instace.getInstanceName(),
-								"Unknown BSI Status", phase, actionString, patchString);
+						assignmentInfoBeans.add(AIB);
+					} else {
+						AssignmentInfoBean AIB = new AssignmentInfoBean(instace.getInstanceName(), "Unknown BSI Status",
+								phase, actionString, patchString);
 						assignmentInfoBeans.add(AIB);
 					}
 					break;
 				default:
 					logger.error("Unkonwn <phase> status: " + phase);
-					AssignmentInfoBean AIB = new AssignmentInfoBean(instace.getInstanceName(),
-							"Unknown BSI Status", phase, actionString, patchString);
+					AssignmentInfoBean AIB = new AssignmentInfoBean(instace.getInstanceName(), "Unknown BSI Status",
+							phase, actionString, patchString);
 					assignmentInfoBeans.add(AIB);
 					break;
 				}
 			}
 			logger.info("User: " + userName + ", BSI infos: " + assignmentInfoBeans);
-			return Response.ok().entity(assignmentInfoBeans).build();
+			return Response.ok().entity(assignmentInfoBeans).tag(String.join("->", userName, tenantId)).build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getAssignmentsInfoForUser hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(String.join("->", userName, tenantId))
+					.build();
 		}
 	}
 

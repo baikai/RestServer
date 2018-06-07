@@ -31,6 +31,9 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
 
+import com.asiainfo.ocmanager.audit.Audit;
+import com.asiainfo.ocmanager.audit.Audit.Action;
+import com.asiainfo.ocmanager.audit.Audit.TargetType;
 import com.asiainfo.ocmanager.auth.utils.TokenPaserUtils;
 import com.asiainfo.ocmanager.persistence.model.Service;
 import com.asiainfo.ocmanager.persistence.model.ServiceInstance;
@@ -66,6 +69,7 @@ public class ServiceResource {
 	 */
 	@GET
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.SERVICES)
 	public Response getServices() {
 
 		try {
@@ -110,11 +114,11 @@ public class ServiceResource {
 
 			List<Service> services = ServicePersistenceWrapper.getAllServices();
 
-			return Response.ok().entity(services).build();
+			return Response.ok().entity(services).tag("all-services").build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getServices  hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag("all-services").build();
 		}
 	}
 
@@ -126,15 +130,16 @@ public class ServiceResource {
 	@GET
 	@Path("{id}")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.SERVICE)
 	public Response getServiceById(@PathParam("id") String serviceId) {
 		try {
 			Service service = ServicePersistenceWrapper.getServiceById(serviceId);
 
-			return Response.ok().entity(service == null ? new Service() : service).build();
+			return Response.ok().entity(service == null ? new Service() : service).tag(serviceId).build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getServiceById hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(serviceId).build();
 		}
 	}
 
@@ -146,8 +151,9 @@ public class ServiceResource {
 	@POST
 	@Path("/broker")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.CREATE, targetType = TargetType.BROKER)
 	public Response addServiceBroker(String reqBodyStr, @Context HttpServletRequest request) {
-
+		String brokerIP = extractIP(reqBodyStr);
 		try {
 
 			String adToken = request.getHeader("token");
@@ -156,7 +162,7 @@ public class ServiceResource {
 						.entity(new ResourceResponseBean("add service broker failed",
 								"token is null or empty, please check the token in request header.",
 								ResponseCodeConstant.EMPTY_TOKEN))
-						.build();
+						.tag(brokerIP).build();
 			}
 
 			String loginUser = TokenPaserUtils.paserUserName(adToken);
@@ -170,7 +176,7 @@ public class ServiceResource {
 						.entity(new ResourceResponseBean("add service broker failed",
 								"the user is not system admin role, does NOT have the add service broker permission.",
 								ResponseCodeConstant.NO_ADD_SERVICE_BROKER_PERMISSION))
-						.build();
+						.tag(brokerIP).build();
 			}
 
 			String url = DataFoundryConfiguration.getDFProperties().get(Constant.DATAFOUNDRY_URL);
@@ -198,7 +204,7 @@ public class ServiceResource {
 					// response2.getStatusLine().getStatusCode();
 					String bodyStr = EntityUtils.toString(response2.getEntity());
 
-					return Response.ok().entity(bodyStr).build();
+					return Response.ok().entity(bodyStr).tag(brokerIP).build();
 				} finally {
 					response2.close();
 				}
@@ -208,8 +214,15 @@ public class ServiceResource {
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("addServiceBroker hit exception-> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(brokerIP).build();
 		}
+	}
+
+	private String extractIP(String reqBodyStr) {
+		JsonElement reqBodyJson = new JsonParser().parse(reqBodyStr);
+		JsonObject spec = reqBodyJson.getAsJsonObject().getAsJsonObject("spec");
+		JsonObject url = spec.getAsJsonObject("url");
+		return url.getAsString();
 	}
 
 	/**
@@ -220,13 +233,14 @@ public class ServiceResource {
 	@GET
 	@Path("/df")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.SERVICES)
 	public Response getServiceFromDf() {
 		try {
-			return Response.ok().entity(ServiceResource.callDFToGetAllServices()).build();
+			return Response.ok().entity(ServiceResource.callDFToGetAllServices()).tag("all-services").build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getServiceFromDf hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag("all-services").build();
 		}
 	}
 
@@ -238,6 +252,7 @@ public class ServiceResource {
 	@DELETE
 	@Path("/broker/{name}")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.DELETE, targetType = TargetType.BROKER)
 	public Response deleteServiceBroker(@PathParam("name") String serviceBrokerName,
 			@Context HttpServletRequest request) {
 		try {
@@ -248,7 +263,7 @@ public class ServiceResource {
 						.entity(new ResourceResponseBean("delete service broker failed",
 								"token is null or empty, please check the token in request header.",
 								ResponseCodeConstant.EMPTY_TOKEN))
-						.build();
+						.tag(serviceBrokerName).build();
 			}
 
 			String loginUser = TokenPaserUtils.paserUserName(adToken);
@@ -262,7 +277,7 @@ public class ServiceResource {
 						.entity(new ResourceResponseBean("delete service broker failed",
 								"the user is not system admin role, does NOT have the add service broker permission.",
 								ResponseCodeConstant.NO_DELETE_SERVICE_BROKER_PERMISSION))
-						.build();
+						.tag(serviceBrokerName).build();
 			}
 
 			String url = DataFoundryConfiguration.getDFProperties().get(Constant.DATAFOUNDRY_URL);
@@ -285,7 +300,7 @@ public class ServiceResource {
 
 					String bodyStr = EntityUtils.toString(response1.getEntity());
 
-					return Response.ok().entity(bodyStr).build();
+					return Response.ok().entity(bodyStr).tag(serviceBrokerName).build();
 				} finally {
 					response1.close();
 				}
@@ -295,7 +310,7 @@ public class ServiceResource {
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("deleteServiceBroker hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(serviceBrokerName).build();
 		}
 	}
 
@@ -349,14 +364,15 @@ public class ServiceResource {
 	@GET
 	@Path("all/instances")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.INSTANCES)
 	public Response getAllServiceInstances() {
 		try {
 			List<ServiceInstance> serviceInstances = ServiceInstancePersistenceWrapper.getAllServiceInstances();
-			return Response.ok().entity(serviceInstances).build();
+			return Response.ok().entity(serviceInstances).tag("all-instances").build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getAllServiceInstances hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag("all-instances").build();
 		}
 	}
 
@@ -368,6 +384,7 @@ public class ServiceResource {
 	@GET
 	@Path("{serviceName}/plan")
 	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.GET, targetType = TargetType.SERVICE_PLAN)
 	public Response getServicePlanInfo(@PathParam("serviceName") String serviceName) {
 		try {
 			String servicesStr = ServiceResource.callDFToGetAllServices();
@@ -379,7 +396,7 @@ public class ServiceResource {
 					String name = spec.get("name").getAsString();
 					String plan = spec.getAsJsonArray("plans").toString();
 					if (serviceName.toLowerCase().equals(name.toLowerCase())) {
-						return Response.ok().entity(plan).build();
+						return Response.ok().entity(plan).tag(serviceName).build();
 					}
 				}
 			}
@@ -389,11 +406,11 @@ public class ServiceResource {
 							"can NOT find the service plan, please make sure you input the correct service name"
 									+ " or the service is added successfully in the OCManager.",
 							ResponseCodeConstant.SERVICE_PLAN_NOT_FOUND))
-					.build();
+					.tag(serviceName).build();
 		} catch (Exception e) {
 			// system out the exception into the console log
 			logger.error("getServicePlanInfo hit exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(serviceName).build();
 		}
 	}
 

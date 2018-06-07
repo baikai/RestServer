@@ -11,6 +11,9 @@ import javax.ws.rs.core.Response.Status;
 
 import org.apache.log4j.Logger;
 
+import com.asiainfo.ocmanager.audit.Audit;
+import com.asiainfo.ocmanager.audit.Audit.Action;
+import com.asiainfo.ocmanager.audit.Audit.TargetType;
 import com.asiainfo.ocmanager.rest.bean.ResourceResponseBean;
 import com.asiainfo.ocmanager.rest.constant.ResponseCodeConstant;
 
@@ -23,6 +26,7 @@ public class ExternalFileResource {
 	@GET
 	@Path("/clusterHosts")
 	@Produces(MediaType.APPLICATION_OCTET_STREAM)
+	@Audit(action = Action.GET, targetType = TargetType.EXTERNAL_FILE)
 	public Response getHostsFile() {
 		try {
 			String path = BASE + "hosts";
@@ -34,15 +38,15 @@ public class ExternalFileResource {
 						.entity(new ResourceResponseBean("download hosts file failed!",
 								"hosts file NOT exist, please consult admin,",
 								ResponseCodeConstant.CAN_NOT_FIND_EXTERNAL_FILE))
-						.build();
+						.tag(path).build();
 			}
 
 			return Response.ok(file).header("Content-disposition", "attachment;filename=" + "hosts")
-					.header("Cache-Control", "no-cache").build();
+					.header("Cache-Control", "no-cache").tag(path).build();
 
 		} catch (Exception e) {
 			logger.error("Get external file exception -> ", e);
-			return Response.status(Status.BAD_REQUEST).entity(e.toString()).build();
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(BASE + "hosts").build();
 		}
 	}
 
