@@ -5,6 +5,7 @@ import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
+import java.util.UUID;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.DELETE;
@@ -26,6 +27,8 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
+import org.ini4j.InvalidFileFormatException;
+import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,7 +54,10 @@ import com.asiainfo.ocmanager.service.broker.BrokerAdapterInterface;
 import com.asiainfo.ocmanager.service.broker.utils.BrokerAdaptorUtils;
 import com.asiainfo.ocmanager.service.client.DFRestClient;
 import com.asiainfo.ocmanager.utils.DFTemplate;
+import com.asiainfo.ocmanager.utils.EtcdJson;
+import com.asiainfo.ocmanager.service.client.CmEtcdClient;
 import com.asiainfo.ocmanager.utils.OsClusterIni;
+import com.asiainfo.ocmanager.utils.ServicesIni;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
@@ -59,6 +65,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+
 
 /**
  *
@@ -458,5 +465,57 @@ public class BrokerResource {
 		// Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(serviceBrokerName).build();
 		// }
 	}
-
+	@POST
+	@Path("/broker/catalog/{name}")
+	@Produces((MediaType.APPLICATION_JSON + Constant.SEMICOLON + Constant.CHARSET_EQUAL_UTF_8))
+	@Audit(action = Action.CREATE, targetType = TargetType.CATALOG)
+	public Response initEtcd (@PathParam("name") String serviceBrokerName) {
+		//get jsonArray from file
+		JsonArray serviceList = null;
+		try {
+			serviceList = EtcdJson.getJsonArray();
+		} catch(Exception e) {
+			logger.error("fail to get jsonArray from file", e);
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(serviceBrokerName).build();
+		}
+		//init etcd client
+		try {
+			CmEtcdClient etcd_client = CmEtcdClient.getInstance();
+			etcd_client.check(serviceBrokerName);
+			if (serviceList != null) {
+				for (int serviceNum = 0; serviceNum < serviceList.size(); serviceNum++) {
+					JsonObject serviceAction = serviceList.get(serviceNum).getAsJsonObject();
+					JsonArray actionList = serviceAction.get("action-list").getAsJsonArray();
+					String uuid = UUID.randomUUID().toString();
+					for (int actionNum = 0; actionNum < actionList.size(); actionNum++ ) {
+						JsonObject action = actionList.get(actionNum).getAsJsonObject();
+						action.addProperty("key", action.get("key").getAsString().replace("${broker-id}", serviceBrokerName));
+						action.addProperty("key", action.get("key").getAsString().replace("${catalog-id}", uuid));
+						execAction(action);
+					}
+				}
+			}
+		} catch (Exception e) {
+			logger.error("fail to init etcd", e);
+			return Response.status(Status.BAD_REQUEST).entity(e.toString()).tag(serviceBrokerName).build();
+		}
+		BrokerPersistenceWrapper.insert(new Broker(serviceBrokerName));
+		return Response.ok().entity(serviceList.getAsString()).tag(serviceBrokerName).build();
+	}
+	private void execAction(JsonObject action) {
+		
+		CmEtcdClient etcd_client = CmEtcdClient.getInstance();
+		
+		switch (action.get("action").getAsString()) {
+		case "createDir" :
+			etcd_client.createDir(action.get("key").getAsString());
+			break;
+		case "write" :
+			etcd_client.write(action.get("key").getAsString(), action.get("value").getAsString());
+			break;
+		default :
+			logger.error("error action when init etcd");
+			throw new RuntimeException("unexpect action : " + action);
+		}
+	}
 }

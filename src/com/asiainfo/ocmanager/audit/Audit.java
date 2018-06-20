@@ -176,6 +176,10 @@ public @interface Audit {
 		/**
 		 * clusters
 		 */
-		CLUSTERS
+		CLUSTERS,
+		/**
+		 * catalog
+		 */
+		CATALOG
 	}
 }
