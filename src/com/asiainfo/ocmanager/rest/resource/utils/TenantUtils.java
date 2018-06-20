@@ -73,8 +73,8 @@ public class TenantUtils {
 
 		int count = 0;
 		while (currentBound == bound) {
-			// if the wait 60s, think it is dead loop, break
-			if (count > 60) {
+			// if the wait 900s, think it is dead loop, break
+			if (count > 900) {
 				logger.error("watiInstanceUnBindingComplete -> waited too long for unbinding, break and proceed");
 				break;
 			}
@@ -114,8 +114,8 @@ public class TenantUtils {
 
 		int count = 0;
 		while (currentBound == bound) {
-			// if the wait 3600s, think it is dead loop, break
-			if (count > 3600) {
+			// if the wait 900s, think it is dead loop, break
+			if (count > 900) {
 				logger.debug("watiInstanceBindingComplete -> hit dead loop, break");
 				break;
 			}
@@ -865,5 +865,13 @@ public class TenantUtils {
 		}
 		return osResponse;
 	}
+	
+	
+	
+	
+	
+	
+	
+	
 
 }
